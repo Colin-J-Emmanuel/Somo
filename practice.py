@@ -17,6 +17,7 @@ from pydantic import BaseModel, Field
 
 import config
 import llm
+import observability as obs
 import prompts
 
 logging.getLogger("pypdf").setLevel(logging.ERROR)  # font warnings from scanned papers are harmless
@@ -86,8 +87,9 @@ def _load_disk_cache():
 
 def _save_disk_cache():
     try:
-        # only questions found on the web: a generated fallback might just mean the web was down
-        data = {_key_str(k): v.model_dump() for k, v in _cache.items() if v.kind != "generated"}
+        # every result, generated ones too (they're labeled), so a warmed demo topic is always instant;
+        # delete practice_cache.json to search the web again
+        data = {_key_str(k): v.model_dump() for k, v in _cache.items()}
         with open(config.PRACTICE_CACHE_FILE, "w") as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
     except Exception as e:  # noqa: BLE001
@@ -138,7 +140,7 @@ def _search(query: str, domains: list[str] | None) -> list[dict]:
         if text.strip() or url.lower().split("?")[0].endswith(".pdf"):
             pages.append({"url": url, "title": _field(r, "title"), "text": text})
     # Search often returns only a short summary of a PDF: download those and read the full text
-    with ThreadPoolExecutor(max_workers=5) as pool:
+    with obs.span("http.client", "read past-paper PDFs", count=len(pages)), ThreadPoolExecutor(max_workers=5) as pool:
         full = list(pool.map(_full_pdf_text, pages))
     for page, text in zip(pages, full):
         if text:
@@ -155,11 +157,19 @@ def _full_pdf_text(page: dict) -> str:
     try:
         import httpx
         from pypdf import PdfReader
-        r = httpx.get(url, timeout=config.PDF_TIMEOUT_S, follow_redirects=True)
-        r.raise_for_status()
-        if len(r.content) > config.PDF_MAX_BYTES:
-            return ""
-        reader = PdfReader(io.BytesIO(r.content))
+        # Hard deadline for the whole download: httpx's timeout is per chunk, so a server that
+        # trickles data never trips it (Sentry caught necta.go.tz taking 3.6 minutes).
+        deadline = time.time() + config.PDF_TIMEOUT_S
+        data = bytearray()
+        with httpx.stream("GET", url, timeout=config.PDF_TIMEOUT_S, follow_redirects=True) as r:
+            r.raise_for_status()
+            for chunk in r.iter_bytes():
+                data.extend(chunk)
+                if len(data) > config.PDF_MAX_BYTES:
+                    return ""
+                if time.time() > deadline:
+                    raise TimeoutError(f"download took over {config.PDF_TIMEOUT_S}s")
+        reader = PdfReader(io.BytesIO(bytes(data)))
         text = ""
         for pdf_page in reader.pages:
             text += (pdf_page.extract_text() or "") + "\n"
@@ -182,7 +192,10 @@ def find_practice(concept: str, problem: str, curriculum: str, language: str) ->
     try:
         if not nimble_available():
             raise RuntimeError("no NIMBLE_API_KEY")
-        pages = search_exam_pages(concept, curriculum)
+        with obs.span("http.client", "nimble search past papers", curriculum=curriculum) as sp:
+            pages = search_exam_pages(concept, curriculum)
+            if sp is not None:
+                sp.set_data("pages", len(pages))
         print(f"  [nimble] {len(pages)} pages in {time.time() - start:.1f}s", file=sys.stderr)
         for pg in pages:
             print(f"    - {pg['title'][:70]}  ({len(pg['text'])} chars)  {pg['url'][:80]}", file=sys.stderr)
@@ -206,6 +219,8 @@ def find_practice(concept: str, problem: str, curriculum: str, language: str) ->
                           seconds=round(time.time() - start, 1))
     except Exception as e:  # noqa: BLE001 — fall back to a Somo-written question, labeled as such
         print(f"  [nimble] falling back to a generated question ({str(e)[:80]})", file=sys.stderr)
+        with obs.span("practice.fallback", "no usable past-paper question", reason=str(e)[:120]):
+            pass
         q, _ = llm.structured(
             prompts.EXAM_STYLE_PROMPT.format(concept=concept, problem=problem, exam=cur["exam_label"], language=language),
             PickedQuestion,

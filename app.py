@@ -17,11 +17,13 @@ from pydantic import BaseModel, Field
 
 import config
 import llm
+import observability as obs
 import pipeline
 import practice
 import prompts
 import sessions
 
+obs.init()  # Sentry tracing, when SENTRY_DSN is set
 app = FastAPI(title="Somo")
 executor = ThreadPoolExecutor(max_workers=8)  # background work: verification, check questions
 
@@ -105,7 +107,7 @@ async def api_diagnose(
     sid = sessions.create(diagnosis=d, language=language, curriculum=curriculum, provider=provider,
                           image=llm.Image(data, mime))
     # Verification runs in the background while the lesson streams (hides ~4s of latency)
-    sessions.get(sid)["verify_future"] = executor.submit(pipeline.verify, d)
+    sessions.get(sid)["verify_future"] = executor.submit(obs.background, "verify answer", pipeline.verify, d)
     return {"session": sid, "diagnosis": d.model_dump(), "provider": provider}
 
 
@@ -123,10 +125,10 @@ def api_lesson(session: str, language: str | None = None, curriculum: str | None
         error_explanation=d.error_explanation or "(none)",
         **_ctx(s),
     )
-    check_future = executor.submit(_make_check, s, "slightly easier")  # ready by the time the lesson ends
+    check_future = executor.submit(obs.background, "make check question", _make_check, s, "slightly easier")  # ready by the time the lesson ends
     # Start the Nimble web search now, so a real exam question is ready when the student gets the check right
     s["practice_future"] = executor.submit(
-        practice.find_practice, d.concept, d.problem, s["curriculum"], s["language"])
+        obs.background, "find past exam question", practice.find_practice, d.concept, d.problem, s["curriculum"], s["language"])
 
     def gen():
         lesson = []
@@ -165,7 +167,7 @@ def api_correct(req: CorrectRequest):
     except Exception as e:  # noqa: BLE001
         raise HTTPException(502, f"Somo couldn't re-read the photo right now. Please try again. ({str(e)[:120]})")
     s.update(diagnosis=d, provider=provider, check=None, lesson="")
-    s["verify_future"] = executor.submit(pipeline.verify, d)
+    s["verify_future"] = executor.submit(obs.background, "verify answer", pipeline.verify, d)
     return {"session": req.session, "diagnosis": d.model_dump(), "provider": provider}
 
 
@@ -205,7 +207,7 @@ def api_reexplain(session: str):
         question=q.question, answer=s.get("last_answer", ""), expected=q.expected_answer,
         previous_analogy=_analogy(s.get("lesson", "")), **_ctx(s),
     )
-    next_future = executor.submit(_make_check, s, "easier")
+    next_future = executor.submit(obs.background, "make easier question", _make_check, s, "easier")
 
     def gen():
         try:
@@ -241,7 +243,7 @@ def api_practice(session: str):
     s = _session(session)
     future = s.get("practice_future")
     try:
-        p = future.result(timeout=45) if future else practice.find_practice(
+        p = future.result(timeout=100) if future else practice.find_practice(
             s["diagnosis"].concept, s["diagnosis"].problem, s["curriculum"], s["language"])
     except Exception as e:  # noqa: BLE001
         raise HTTPException(502, f"Couldn't find a practice question right now. ({str(e)[:100]})")

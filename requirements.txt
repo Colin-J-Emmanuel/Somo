@@ -4,3 +4,4 @@ uvicorn
 python-multipart
 nimble_python
 pypdf
+sentry-sdk[fastapi]

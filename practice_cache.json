@@ -8,5 +8,55 @@
     "source_title": "041 Time: 3 Hours 1 2. 3. 4. 5. 6. 7. I 301041 ll 100017",
     "exam_name": "NECTA CSEE 2023",
     "seconds": 62.6
+  },
+  "solving linear equations with fractions (clearing denominators by multiplying both sides by the same number)|tanzania|Swahili": {
+    "question": "Tafuta thamani ya x katika mlinganyo (2/3)x + 1 = (5/6)x − 2.",
+    "expected_answer": "x = 18",
+    "kind": "generated",
+    "real": false,
+    "source_url": "",
+    "source_title": "",
+    "exam_name": "",
+    "seconds": 116.6
+  },
+  "comparing coefficients of a perfect square trinomial (completing the square)|tanzania|English": {
+    "question": "Given that x^2 + 12x + P = (x + Q)^2, find the values of P and Q.",
+    "expected_answer": "P = 36 and Q = 6",
+    "kind": "generated",
+    "real": false,
+    "source_url": "",
+    "source_title": "",
+    "exam_name": "",
+    "seconds": 238.6
+  },
+  "solving simultaneous linear equations by elimination|tanzania|Spanish": {
+    "question": "Resuelva las siguientes ecuaciones simultáneas: 2x + 5y = 16 y 3x + 5 = 7y.",
+    "expected_answer": "x = 3, y = 2",
+    "kind": "generated",
+    "real": false,
+    "source_url": "",
+    "source_title": "",
+    "exam_name": "",
+    "seconds": 127.2
+  },
+  "solving linear equations with fractions (clearing denominators by multiplying both sides by the same number)|tanzania|English": {
+    "question": "Find the value of x if (2/3)x + 1 = (5/6)x - 2.",
+    "expected_answer": "x = 18",
+    "kind": "generated",
+    "real": false,
+    "source_url": "",
+    "source_title": "",
+    "exam_name": "",
+    "seconds": 19.9
+  },
+  "solving linear equations with fractions (clearing denominators using the lcm)|tanzania|Swahili": {
+    "question": "Tafuta thamani ya m kama (2/3)m − 1 = (3/4)m − 2.",
+    "expected_answer": "m = 12",
+    "kind": "generated",
+    "real": false,
+    "source_url": "",
+    "source_title": "",
+    "exam_name": "",
+    "seconds": 36.2
   }
 }

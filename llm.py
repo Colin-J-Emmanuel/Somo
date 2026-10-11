@@ -13,6 +13,7 @@ from dotenv import load_dotenv
 from pydantic import BaseModel
 
 import config
+import observability as obs
 
 load_dotenv()
 
@@ -126,19 +127,29 @@ def _claude_text(prompt: str) -> str:
 _gemini_down_until = 0.0  # circuit breaker: skip Gemini until this timestamp
 
 
-def _route(gemini_call, claude_call, label: str):
-    """Try Gemini (one quick retry on a transient error), then Claude. Returns (result, provider)."""
+def _route(gemini_call, claude_call, label: str, gemini_model: str = config.GEMINI_MODEL):
+    """Try Gemini (one quick retry on a transient error), then Claude. Returns (result, provider).
+    Every attempt is a Sentry span, so a trace shows exactly which model answered and how long it took."""
     global _gemini_down_until
     last_error = None
     if time.time() < _gemini_down_until and claude_available():
         start = time.time()
-        result = claude_call()
+        with obs.span("gen_ai.chat", f"claude {label}", provider="claude", model=config.CLAUDE_MODEL,
+                      reason="gemini cooling down"):
+            result = claude_call()
         _log(label, "claude (gemini cooling down)", start)
         return result, "claude"
     for attempt in range(2):
         try:
             start = time.time()
-            result = gemini_call()
+            with obs.span("gen_ai.chat", f"gemini {label}", provider="gemini", model=gemini_model, attempt=attempt + 1) as sp:
+                try:
+                    result = gemini_call()
+                except Exception as e:
+                    if sp is not None:
+                        sp.set_status("internal_error")
+                        sp.set_data("error", _short(e))
+                    raise
             _log(label, "gemini", start)
             return result, "gemini"
         except Exception as e:  # noqa: BLE001
@@ -155,8 +166,11 @@ def _route(gemini_call, claude_call, label: str):
         _gemini_down_until = time.time() + config.GEMINI_COOLDOWN_S
     if claude_available():
         print(f"  [{label}] Gemini failed ({_short(last_error)}), failing over to Claude", file=sys.stderr)
+        obs.failover(label, last_error)
         start = time.time()
-        result = claude_call()
+        with obs.span("gen_ai.chat", f"claude {label}", provider="claude", model=config.CLAUDE_MODEL,
+                      reason="failover"):
+            result = claude_call()
         _log(label, "claude", start)
         return result, "claude"
     raise RuntimeError(f"Gemini failed and no ANTHROPIC_API_KEY for failover: {last_error}")
@@ -173,7 +187,7 @@ def structured(prompt: str, schema: type[BaseModel], image: Image | None = None)
 def text(prompt: str, gemini_model: str | None = None):
     """Plain text. Defaults to Gemini; pass config.GEMMA_MODEL for cheap checks."""
     model = gemini_model or config.GEMINI_MODEL
-    return _route(lambda: _gemini_text(prompt, model), lambda: _claude_text(prompt), model)
+    return _route(lambda: _gemini_text(prompt, model), lambda: _claude_text(prompt), model, model)
 
 
 def _short(e: Exception) -> str:
