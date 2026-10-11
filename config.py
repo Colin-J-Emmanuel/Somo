@@ -9,6 +9,7 @@ CLAUDE_MODEL = "claude-sonnet-5-5"
 # Time budgets (seconds). Gemini gets one quick retry, then Claude takes over.
 GEMINI_TIMEOUT_S = 15
 CLAUDE_TIMEOUT_S = 40
+STREAM_TIMEOUT_S = 60   # a full streamed lesson
 
 # Circuit breaker: after Gemini fails, skip it for this long and go straight to Claude
 GEMINI_COOLDOWN_S = 60

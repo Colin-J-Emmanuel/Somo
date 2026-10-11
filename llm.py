@@ -182,3 +182,56 @@ def _short(e: Exception) -> str:
 
 def _log(label: str, provider: str, start: float):
     print(f"  [{label}] {provider} {time.time() - start:.1f}s", file=sys.stderr)
+
+
+# ---------- Streaming (lessons) ----------
+
+_gemini_streamer = None
+
+
+def _gemini_stream_client():
+    """Separate client with a longer timeout: a whole lesson can take longer than one quick call."""
+    global _gemini_streamer
+    if _gemini_streamer is None:
+        from google import genai
+        from google.genai import types
+        _gemini_streamer = genai.Client(
+            api_key=os.environ["GEMINI_API_KEY"],
+            http_options=types.HttpOptions(timeout=config.STREAM_TIMEOUT_S * 1000),
+        )
+    return _gemini_streamer
+
+
+def stream_text(prompt: str):
+    """Yield (chunk, provider). Fails over to Claude only if Gemini fails before the first chunk."""
+    global _gemini_down_until
+    started = False
+    if not (time.time() < _gemini_down_until and claude_available()):
+        try:
+            start = time.time()
+            for chunk in _gemini_stream_client().models.generate_content_stream(
+                model=config.GEMINI_MODEL, contents=prompt
+            ):
+                if chunk.text:
+                    started = True
+                    yield chunk.text, "gemini"
+            if started:
+                _log("lesson stream", "gemini", start)
+                return
+        except Exception as e:  # noqa: BLE001
+            if started:
+                raise  # already showing text: don't switch providers mid-lesson
+            if _is_transient(e):
+                _gemini_down_until = time.time() + config.GEMINI_COOLDOWN_S
+            print(f"  [lesson stream] Gemini failed ({_short(e)}), failing over to Claude", file=sys.stderr)
+    if not claude_available():
+        raise RuntimeError("Gemini failed and no ANTHROPIC_API_KEY for failover")
+    start = time.time()
+    with _claude_client().messages.stream(
+        model=config.CLAUDE_MODEL,
+        max_tokens=2048,
+        messages=[{"role": "user", "content": prompt}],
+    ) as stream:
+        for text_chunk in stream.text_stream:
+            yield text_chunk, "claude"
+    _log("lesson stream", "claude", start)
