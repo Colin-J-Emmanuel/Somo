@@ -35,12 +35,15 @@
     background-size: 24px 24px;
     min-height: 100vh;
   }
-  /* the red margin line of an exercise book */
-  body::before {
-    content: ""; position: fixed; top: 0; bottom: 0; left: calc(var(--margin) - 10px);
+  /* the page: centred, with the red margin line of an exercise book riding along with it */
+  main {
+    position: relative; max-width: 600px; min-height: 100vh;
+    margin: 0 auto; padding: 16px 20px 64px var(--margin);
+  }
+  main::before {
+    content: ""; position: absolute; top: 0; bottom: 0; left: calc(var(--margin) - 10px);
     width: 2px; background: color-mix(in srgb, var(--red) 45%, transparent); pointer-events: none;
   }
-  main { max-width: 560px; padding: 16px 20px 64px var(--margin); }
 
   header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 20px; }
   .wordmark { font: 700 40px/1 var(--hand); color: var(--blue); margin: 0; transform: rotate(-2deg); }
