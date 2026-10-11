@@ -71,9 +71,13 @@ def answers_match(problem: str, a: str, b: str) -> bool:
 
 # ---------- Pipeline steps ----------
 
-def diagnose(image: llm.Image, curriculum: str = config.DEFAULT_CURRICULUM):
+def diagnose(image: llm.Image, curriculum: str = config.DEFAULT_CURRICULUM, correction: str = "",
+             language: str = "English"):
+    """correction: the student's own wording of the problem, when Somo misread the photo."""
     context = config.CURRICULA[curriculum]["context"]
-    return llm.structured(prompts.DIAGNOSE_PROMPT.format(context=context), Diagnosis, image)
+    hint = (f"\nIMPORTANT: the student checked your reading and says the problem is exactly: {correction}\n"
+            "Use this as the problem. Re-read their work with this in mind.\n") if correction else ""
+    return llm.structured(prompts.DIAGNOSE_PROMPT.format(context=context, hint=hint, language=language), Diagnosis, image)
 
 
 def verify(diagnosis: Diagnosis) -> dict:
