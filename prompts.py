@@ -10,11 +10,11 @@ Do the following:
 3. Solve the problem yourself, carefully and step by step, and give the correct final answer.
 4. If there is student work, compare it with your solution and find the FIRST line where the student made a mistake.
    - error_step: quote that line, e.g. "Line 2: 2x = 14". Use an empty string if there is no student work or no mistake.
-   - error_explanation: one or two plain sentences on what went wrong and why (e.g. "Subtracted 3 from the left side but added it to the right side."). Empty string if no mistake.
+   - error_explanation: one or two plain sentences IN {language} on what went wrong and why (e.g. "Subtracted 3 from the left side but added it to the right side."). Empty string if no mistake.
    - student_answer: the student's final answer, or an empty string if none is shown.
 5. If the printed question has several parts (a), (b), ..., focus only on the part the student worked on, and use only that part as the problem.
 6. If the handwriting is unclear, make your best reading and lower your confidence.
-
+{hint}
 Be precise. Do not invent student work that is not in the photo."""
 
 VERIFY_PROMPT = """Solve this math problem carefully, step by step, and give the final answer.
@@ -81,3 +81,30 @@ Explain it again in {language}, more simply than before (under 120 words):
 - Show where their answer went wrong, step by step.
 - Use a NEW everyday analogy from the student's world ({analogies}), different from: "{previous_analogy}".
 Use simple Markdown. End by encouraging them to try one more question."""
+
+
+PICK_EXAM_PROMPT = """You help a student practise for {exam}.
+They are learning: {concept}
+Their original problem was: {problem}
+
+Below are web pages found by a search for real past exam questions. Pick ONE question that:
+- really appears in the sources (copy its wording faithfully; do not invent or merge questions),
+- tests the same concept,
+- has a single short final answer,
+- is at about the same level as the original problem.
+If the question is not in {language}, translate it into {language} and keep the maths exactly the same.
+Work out the correct final answer yourself.
+First write question_concept: what the chosen question really tests. A question on a different topic
+(for example surds when the student is learning completing the square) is NOT suitable, even from a real paper.
+If no source contains a suitable question, set found to false.
+Set is_past_exam to true ONLY if the chosen source is an official past exam paper ({exam}).
+Textbooks, worksheets, revision and tutoring sites are NOT past exam papers, even if the question is good.
+Official examiner reports that quote the exam's questions word for word (for example NECTA Candidates' Item Response Analysis reports) DO count: use the exam year in exam_name.
+
+{sources}"""
+
+EXAM_STYLE_PROMPT = """Write ONE practice question in the style of {exam}, in {language}.
+It must test: {concept}
+The student's original problem was: {problem}
+Use different numbers, a single short final answer, and the wording style of real exam papers.
+Set question_concept to the concept, same_concept to true, found and is_past_exam to false, and source_index to -1. Give the correct final answer and leave exam_name empty."""

@@ -18,6 +18,7 @@ from pydantic import BaseModel, Field
 import config
 import llm
 import pipeline
+import practice
 import prompts
 import sessions
 
@@ -33,6 +34,11 @@ class CheckQuestion(BaseModel):
 class CheckRequest(BaseModel):
     session: str
     answer: str
+
+
+class CorrectRequest(BaseModel):
+    session: str
+    problem: str
 
 
 # ---------- Helpers ----------
@@ -93,18 +99,23 @@ async def api_diagnose(
     if not mime:
         raise HTTPException(400, "Please upload a photo (JPEG or PNG).")
     try:
-        d, provider = await run_in_threadpool(pipeline.diagnose, llm.Image(data, mime), curriculum)
+        d, provider = await run_in_threadpool(pipeline.diagnose, llm.Image(data, mime), curriculum, "", language)
     except Exception as e:  # noqa: BLE001
         raise HTTPException(502, f"Somo couldn't read that photo right now. Please try again. ({str(e)[:120]})")
-    sid = sessions.create(diagnosis=d, language=language, curriculum=curriculum, provider=provider)
+    sid = sessions.create(diagnosis=d, language=language, curriculum=curriculum, provider=provider,
+                          image=llm.Image(data, mime))
     # Verification runs in the background while the lesson streams (hides ~4s of latency)
     sessions.get(sid)["verify_future"] = executor.submit(pipeline.verify, d)
     return {"session": sid, "diagnosis": d.model_dump(), "provider": provider}
 
 
 @app.get("/api/lesson")
-def api_lesson(session: str):
+def api_lesson(session: str, language: str | None = None, curriculum: str | None = None):
     s = _session(session)
+    if language in config.LANGUAGES:
+        s["language"] = language        # "Teach me again in Spanish"
+    if curriculum in config.CURRICULA:
+        s["curriculum"] = curriculum
     d = s["diagnosis"]
     prompt = prompts.LESSON_PROMPT.format(
         transcription=d.transcription,
@@ -113,6 +124,9 @@ def api_lesson(session: str):
         **_ctx(s),
     )
     check_future = executor.submit(_make_check, s, "slightly easier")  # ready by the time the lesson ends
+    # Start the Nimble web search now, so a real exam question is ready when the student gets the check right
+    s["practice_future"] = executor.submit(
+        practice.find_practice, d.concept, d.problem, s["curriculum"], s["language"])
 
     def gen():
         lesson = []
@@ -137,6 +151,22 @@ def api_lesson(session: str):
         yield _sse("done", {})
 
     return _stream(gen())
+
+
+@app.post("/api/correct")
+def api_correct(req: CorrectRequest):
+    """Human in the loop: the student fixes what Somo read, and Somo re-reads the photo with that."""
+    s = _session(req.session)
+    problem = req.problem.strip()[:1000]
+    if not problem:
+        raise HTTPException(400, "Type the problem as it appears on the page.")
+    try:
+        d, provider = pipeline.diagnose(s["image"], s["curriculum"], correction=problem, language=s["language"])
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(502, f"Somo couldn't re-read the photo right now. Please try again. ({str(e)[:120]})")
+    s.update(diagnosis=d, provider=provider, check=None, lesson="")
+    s["verify_future"] = executor.submit(pipeline.verify, d)
+    return {"session": req.session, "diagnosis": d.model_dump(), "provider": provider}
 
 
 @app.post("/api/check")
@@ -203,6 +233,21 @@ def api_next(session: str, difficulty: str = "harder"):
     except Exception as e:  # noqa: BLE001
         raise HTTPException(502, f"Couldn't make a question right now. ({str(e)[:100]})")
     return {"question": q.question}
+
+
+@app.get("/api/practice")
+def api_practice(session: str):
+    """A real past exam question on this concept, found on the live web by Nimble."""
+    s = _session(session)
+    future = s.get("practice_future")
+    try:
+        p = future.result(timeout=45) if future else practice.find_practice(
+            s["diagnosis"].concept, s["diagnosis"].problem, s["curriculum"], s["language"])
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(502, f"Couldn't find a practice question right now. ({str(e)[:100]})")
+    s["check"] = CheckQuestion(question=p.question, expected_answer=p.expected_answer)  # /api/check grades it
+    return {"question": p.question, "kind": p.kind, "real": p.real, "source_url": p.source_url,
+            "source_title": p.source_title, "exam_name": p.exam_name, "seconds": p.seconds}
 
 
 @app.get("/api/config")

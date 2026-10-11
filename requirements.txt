@@ -2,3 +2,5 @@ anthropic
 fastapi
 uvicorn
 python-multipart
+nimble_python
+pypdf

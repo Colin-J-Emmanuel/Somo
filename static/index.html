@@ -1,0 +1,559 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#F5F8FC">
+<title>Somo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Kalam:wght@400;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.6/purify.min.js"></script>
+<style>
+  :root {
+    --paper: #F5F8FC;
+    --grid: #DFE7F1;
+    --ink: #1B2533;
+    --ink-soft: #55627A;
+    --blue: #1F3F8F;
+    --red: #C8323F;
+    --green: #24794B;
+    --margin: 44px;
+    --hand: "Kalam", "Comic Sans MS", cursive;
+    --text: "Atkinson Hyperlegible", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html { color-scheme: light; }
+  body {
+    margin: 0;
+    font: 17px/1.55 var(--text);
+    color: var(--ink);
+    background-color: var(--paper);
+    background-image:
+      linear-gradient(var(--grid) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+    background-size: 24px 24px;
+    min-height: 100vh;
+  }
+  /* the red margin line of an exercise book */
+  body::before {
+    content: ""; position: fixed; top: 0; bottom: 0; left: calc(var(--margin) - 10px);
+    width: 2px; background: color-mix(in srgb, var(--red) 45%, transparent); pointer-events: none;
+  }
+  main { max-width: 560px; padding: 16px 20px 64px var(--margin); }
+
+  header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 20px; }
+  .wordmark { font: 700 40px/1 var(--hand); color: var(--blue); margin: 0; transform: rotate(-2deg); }
+  .settings { display: flex; gap: 8px; }
+  select {
+    font: inherit; font-size: 15px; color: var(--ink); background: #fff;
+    border: 1.5px solid var(--grid); border-radius: 8px; padding: 6px 8px;
+  }
+
+  h2 { font-size: 19px; margin: 0 0 8px; color: var(--blue); }
+  section { margin: 28px 0; }
+  [hidden] { display: none !important; }
+
+  /* the snap button: the one big thing on an empty page */
+  .snap {
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+    width: 100%; min-height: 168px; padding: 20px;
+    border: 2.5px dashed var(--blue); border-radius: 14px; background: #fff;
+    color: var(--blue); font: 700 22px/1.2 var(--text); cursor: pointer;
+  }
+  .snap small { font-weight: 400; font-size: 15px; color: var(--ink-soft); }
+  .snap.compact { min-height: 0; flex-direction: row; font-size: 17px; padding: 12px; }
+  #file { position: absolute; width: 1px; height: 1px; opacity: 0; }
+  #preview { width: 100%; max-height: 260px; object-fit: contain; border-radius: 10px; background: #fff; border: 1px solid var(--grid); margin-top: 12px; }
+
+  .status { color: var(--ink-soft); font-style: italic; }
+  .status::after { content: "…"; animation: dots 1.2s steps(4, end) infinite; display: inline-block; width: 1em; overflow: hidden; vertical-align: bottom; }
+  @keyframes dots { from { width: 0; } to { width: 1em; } }
+
+  /* what Somo read: the student's lines, the wrong one circled in red pen */
+  .page { background: #fff; border: 1px solid var(--grid); border-radius: 10px; padding: 14px 16px; }
+  .problem { font-weight: 700; margin: 0 0 10px; white-space: pre-wrap; }
+  .lines { list-style: none; margin: 0; padding: 0; }
+  .lines li { position: relative; padding: 3px 10px; white-space: pre-wrap; }
+  .lines li.wrong { color: var(--red); }
+  .lines li.wrong svg { position: absolute; inset: -4px 0; width: 100%; height: calc(100% + 8px); overflow: visible; pointer-events: none; }
+  .lines li.wrong svg path { fill: none; stroke: var(--red); stroke-width: 2.2; stroke-linecap: round; stroke-dasharray: 1400; stroke-dashoffset: 1400; animation: draw .9s .3s ease-out forwards; }
+  @keyframes draw { to { stroke-dashoffset: 0; } }
+  .pen-note { font: 400 19px/1.35 var(--hand); color: var(--red); margin: 12px 0 0; }
+  .pen-note.good { color: var(--green); }
+  .concept { color: var(--ink-soft); font-size: 15px; margin: 10px 0 0; }
+
+  .row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
+  button {
+    font: 700 16px/1 var(--text); border-radius: 10px; padding: 12px 16px; cursor: pointer;
+    border: 2px solid var(--blue); background: var(--blue); color: #fff;
+  }
+  button.quiet { background: #fff; color: var(--blue); }
+  button:disabled { opacity: .5; cursor: wait; }
+  :focus-visible { outline: 3px solid color-mix(in srgb, var(--blue) 45%, white); outline-offset: 2px; }
+  textarea { width: 100%; font: inherit; padding: 10px; border: 1.5px solid var(--grid); border-radius: 8px; min-height: 84px; }
+
+  /* the lesson */
+  .lesson { background: #fff; border: 1px solid var(--grid); border-radius: 10px; padding: 4px 16px; }
+  .lesson p, .lesson ul, .lesson ol { margin: 10px 0; }
+  .lesson strong { color: var(--blue); }
+  .lesson p.head { margin: 16px 0 4px; font-size: 18px; }
+  .note { font: 400 18px/1.35 var(--hand); color: var(--red); margin: 10px 0 0; }
+
+  /* check question */
+  .check { background: #fff; border: 2px solid var(--blue); border-radius: 12px; padding: 14px 16px; }
+  .check p { margin: 0 0 10px; font-weight: 700; }
+  .answer { display: flex; gap: 8px; }
+  .answer input { flex: 1; min-width: 0; font: inherit; font-size: 18px; padding: 10px 12px; border: 1.5px solid var(--grid); border-radius: 8px; }
+  .verdict { font: 700 22px/1.3 var(--hand); margin: 12px 0 0; }
+  .verdict.yes { color: var(--green); }
+  .verdict.no { color: var(--red); }
+  .tally { color: var(--ink-soft); font-size: 15px; margin-top: 6px; }
+  .exam-tag { display: inline-block; margin: 0 0 8px; padding: 2px 10px; border: 1.5px solid var(--blue);
+    border-radius: 6px; font: 700 15px/1.4 var(--hand); color: var(--blue); transform: rotate(-1.5deg); }
+  .source { font-size: 14px; color: var(--ink-soft); margin: 10px 0 0; overflow-wrap: anywhere; }
+  .source a { color: var(--blue); }
+
+  .error { color: var(--red); background: #fff; border: 1.5px solid var(--red); border-radius: 10px; padding: 12px 14px; }
+  footer { color: var(--ink-soft); font-size: 13px; margin-top: 40px; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .lines li.wrong svg path { animation: none; stroke-dashoffset: 0; }
+    .status::after { animation: none; width: 1em; }
+  }
+  @media (max-width: 380px) { :root { --margin: 30px; } body { font-size: 16px; } }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1 class="wordmark">Somo</h1>
+    <div class="settings">
+      <select id="language" aria-label="Language"></select>
+      <select id="curriculum" aria-label="Curriculum"></select>
+    </div>
+  </header>
+
+  <section id="snapSection">
+    <label class="snap" for="file" id="snapLabel">
+      <span data-t="snap">Snap a problem</span>
+      <small data-t="snapHint">Take a photo of the question and your working</small>
+    </label>
+    <input id="file" type="file" accept="image/*" capture="environment">
+    <img id="preview" alt="Your photo" hidden>
+    <p id="reading" class="status" hidden data-t="reading">Reading your work</p>
+  </section>
+
+  <section id="readSection" hidden>
+    <h2 data-t="whatIRead">Here's what I read</h2>
+    <div class="page">
+      <p class="problem" id="problem"></p>
+      <ol class="lines" id="lines"></ol>
+      <p class="pen-note" id="penNote"></p>
+      <p class="concept" id="concept"></p>
+    </div>
+    <div class="row" id="confirmRow">
+      <button id="looksRight" data-t="looksRight">Looks right</button>
+      <button id="fixIt" class="quiet" data-t="fixIt">Fix what I read</button>
+    </div>
+    <div id="fixBox" hidden>
+      <p data-t="fixHint">Type the problem exactly as it appears on the page.</p>
+      <textarea id="fixText"></textarea>
+      <div class="row"><button id="reread" data-t="reread">Read it again</button></div>
+    </div>
+  </section>
+
+  <section id="lessonSection" hidden>
+    <h2 data-t="lesson">Let's fix it together</h2>
+    <div class="lesson" id="lesson" aria-live="polite"></div>
+    <p class="note" id="verifyNote" hidden></p>
+    <div class="row" id="againRow" hidden>
+      <button id="teachAgain" class="quiet"></button>
+    </div>
+  </section>
+
+  <section id="checkSection" hidden>
+    <div class="check">
+      <h2 data-t="check">Check yourself</h2>
+      <p class="exam-tag" id="examTag" hidden></p>
+      <p id="question"></p>
+      <form class="answer" id="answerForm">
+        <input id="answer" autocomplete="off" aria-label="Your answer" data-tp="yourAnswer">
+        <button type="submit" id="submit" data-t="checkAnswer">Check</button>
+      </form>
+      <p class="verdict" id="verdict" hidden></p>
+      <p class="tally" id="tally" hidden></p>
+      <p class="source" id="source" hidden></p>
+      <div class="row" id="nextRow" hidden>
+        <button id="examPractice" data-t="examPractice">Practice like the real exam</button>
+        <button id="harder" class="quiet" data-t="harder">Try a harder one</button>
+        <button id="newProblem" class="quiet" data-t="newProblem">New problem</button>
+      </div>
+    </div>
+  </section>
+
+  <section id="reexplainSection" hidden>
+    <h2 data-t="anotherWay">Another way to see it</h2>
+    <div class="lesson" id="reexplain" aria-live="polite"></div>
+  </section>
+
+  <div id="errorBox" class="error" role="alert" hidden>
+    <span id="errorText"></span>
+    <div class="row"><button id="retry" class="quiet" data-t="retry">Try again</button></div>
+  </div>
+
+  <footer id="footer"></footer>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+
+// Interface words in each language. Lesson text comes from the model.
+const T = {
+  English: {
+    snap: "Snap a problem", snapHint: "Take a photo of the question and your working", reading: "Reading your work",
+    whatIRead: "Here's what I read", looksRight: "Looks right", fixIt: "Fix what I read",
+    fixHint: "Type the problem exactly as it appears on the page.", reread: "Read it again",
+    lesson: "Let's fix it together", check: "Check yourself", yourAnswer: "Your answer", checkAnswer: "Check",
+    examPractice: "Practice like the real exam", realExam: "Real past exam question", examFrom: "Past exam paper found on the web by Nimble:", webFrom: "Practice question found on the web by Nimble:",
+    somoWrote: "No past paper found for this topic, so Somo wrote this one in the exam's style.", searching: "Searching past exam papers",
+    harder: "Try a harder one", newProblem: "New problem", anotherWay: "Another way to see it", retry: "Try again",
+    noMistake: "No mistakes here. Nice work.", right: "That's it!", notYet: "Not yet. Let's look again.",
+    teachAgain: "Teach me again in English", lowConfidence: "I'm not fully sure I read this right. Check the problem above before trusting this lesson.",
+    snapAnother: "Snap another problem", tally: (c, a) => `${c} of ${a} right on this topic`,
+  },
+  Swahili: {
+    snap: "Piga picha ya swali", snapHint: "Piga picha ya swali na kazi yako", reading: "Ninasoma kazi yako",
+    whatIRead: "Hiki ndicho nilichosoma", looksRight: "Ni sahihi", fixIt: "Rekebisha nilichosoma",
+    fixHint: "Andika swali jinsi lilivyo kwenye ukurasa.", reread: "Soma tena",
+    lesson: "Turekebishe pamoja", check: "Jipime", yourAnswer: "Jibu lako", checkAnswer: "Angalia",
+    examPractice: "Jizoeze kama mtihani halisi", realExam: "Swali la mtihani uliopita", examFrom: "Mtihani uliopita, umepatikana mtandaoni na Nimble:", webFrom: "Swali la mazoezi, limepatikana mtandaoni na Nimble:",
+    somoWrote: "Hakuna mtihani uliopita uliopatikana kwa mada hii, kwa hiyo Somo imeandika swali kwa mtindo wa mtihani.", searching: "Ninatafuta mitihani iliyopita",
+    harder: "Jaribu swali gumu zaidi", newProblem: "Swali jipya", anotherWay: "Njia nyingine ya kuelewa", retry: "Jaribu tena",
+    noMistake: "Hakuna kosa hapa. Kazi nzuri.", right: "Sawa kabisa!", notYet: "Bado. Tuangalie tena.",
+    teachAgain: "Nifundishe tena kwa Kiswahili", lowConfidence: "Sina uhakika kamili kwamba nimesoma vizuri. Hakiki swali hapo juu.",
+    snapAnother: "Piga picha ya swali jingine", tally: (c, a) => `Umepata ${c} kati ya ${a} kwenye mada hii`,
+  },
+  Spanish: {
+    snap: "Toma una foto del problema", snapHint: "Fotografía la pregunta y tu procedimiento", reading: "Leyendo tu trabajo",
+    whatIRead: "Esto es lo que leí", looksRight: "Está bien", fixIt: "Corregir lo que leí",
+    fixHint: "Escribe el problema tal como aparece en la página.", reread: "Leer de nuevo",
+    lesson: "Vamos a corregirlo juntos", check: "Ponte a prueba", yourAnswer: "Tu respuesta", checkAnswer: "Revisar",
+    examPractice: "Practica como en el examen real", realExam: "Pregunta de un examen real", examFrom: "Examen anterior encontrado en la web por Nimble:", webFrom: "Pregunta de práctica encontrada en la web por Nimble:",
+    somoWrote: "No encontré un examen anterior sobre este tema, así que Somo escribió esta pregunta con el estilo del examen.", searching: "Buscando exámenes anteriores",
+    harder: "Probar uno más difícil", newProblem: "Problema nuevo", anotherWay: "Otra forma de verlo", retry: "Intentar de nuevo",
+    noMistake: "No hay errores. Buen trabajo.", right: "¡Eso es!", notYet: "Todavía no. Veámoslo otra vez.",
+    teachAgain: "Explícamelo otra vez en español", lowConfidence: "No estoy del todo seguro de haberlo leído bien. Revisa el problema arriba.",
+    snapAnother: "Fotografía otro problema", tally: (c, a) => `${c} de ${a} correctas en este tema`,
+  },
+};
+const lang = () => $("language").value;
+const t = (key) => (T[lang()] || T.English)[key] || T.English[key];
+
+function applyLanguage() {
+  document.documentElement.lang = { English: "en", Swahili: "sw", Spanish: "es" }[lang()] || "en";
+  document.querySelectorAll("[data-t]").forEach((el) => (el.textContent = t(el.dataset.t)));
+  document.querySelectorAll("[data-tp]").forEach((el) => (el.placeholder = t(el.dataset.tp)));
+  $("teachAgain").textContent = t("teachAgain");
+  if (state.session) $("snapLabel").querySelector("[data-t=snap]").textContent = t("snapAnother");
+}
+
+const state = { session: null, diagnosis: null, lessonLang: null, lessonCur: null, retry: null, stream: null, providers: new Set() };
+
+// ---------- helpers ----------
+function show(id, on = true) { $(id).hidden = !on; }
+function renderMarkdown(el, text) {
+  el.innerHTML = DOMPurify.sanitize(marked.parse(text));
+  // a paragraph that is only bold text is a section heading
+  el.querySelectorAll("p").forEach((p) => {
+    const s = p.querySelector("strong");
+    if (s && p.textContent.trim() === s.textContent.trim()) p.classList.add("head");
+  });
+}
+function noteProvider(p) {
+  if (!p) return;
+  state.providers.add(p === "gemini" ? "Gemini" : p === "claude" ? "Claude" : p);
+  $("footer").textContent = "Answered by " + [...state.providers].join(" + ");
+}
+function fail(message, retry) {
+  $("errorText").textContent = message;
+  state.retry = retry;
+  show("errorBox");
+  show("reading", false);
+}
+function clearError() { show("errorBox", false); }
+$("retry").onclick = () => { clearError(); state.retry && state.retry(); };
+
+async function api(path, options) {
+  const res = await fetch(path, options);
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.detail || `Something went wrong (${res.status}).`);
+  return body;
+}
+
+// Shrink photos before upload: faster on slow data, and always JPEG (iPhone HEIC included)
+async function shrink(file, maxSide = 1600) {
+  try {
+    const bmp = await createImageBitmap(file);
+    const scale = Math.min(1, maxSide / Math.max(bmp.width, bmp.height));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(bmp.width * scale);
+    canvas.height = Math.round(bmp.height * scale);
+    canvas.getContext("2d").drawImage(bmp, 0, 0, canvas.width, canvas.height);
+    return await new Promise((ok) => canvas.toBlob(ok, "image/jpeg", 0.85));
+  } catch { return file; }
+}
+
+// ---------- 1. snap ----------
+$("file").addEventListener("change", async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  resetBelow("snapSection");
+  $("preview").src = URL.createObjectURL(file);
+  show("preview");
+  const blob = await shrink(file);
+  diagnose(blob);
+  e.target.value = "";
+});
+
+async function diagnose(blob) {
+  clearError();
+  show("reading");
+  const form = new FormData();
+  form.append("image", blob, "photo.jpg");
+  form.append("language", lang());
+  form.append("curriculum", $("curriculum").value);
+  try {
+    const r = await api("/api/diagnose", { method: "POST", body: form });
+    state.session = r.session;
+    noteProvider(r.provider);
+    renderReading(r.diagnosis);
+    $("snapLabel").classList.add("compact");
+    $("snapLabel").querySelector("[data-t=snap]").textContent = t("snapAnother");
+    $("snapLabel").querySelector("small").hidden = true;
+  } catch (err) {
+    fail(err.message, () => diagnose(blob));
+  } finally {
+    show("reading", false);
+  }
+}
+
+// ---------- 2. what I read (human in the loop) ----------
+function renderReading(d) {
+  state.diagnosis = d;
+  $("problem").textContent = d.problem;
+  const lines = d.transcription.split("\n").filter((l) => /^line\s*\d+/i.test(l.trim()));
+  const wrongNo = (d.error_step.match(/line\s*(\d+)/i) || [])[1];
+  $("lines").innerHTML = "";
+  lines.forEach((raw) => {
+    const no = (raw.match(/line\s*(\d+)/i) || [])[1];
+    const li = document.createElement("li");
+    li.textContent = raw.replace(/^\s*line\s*\d+\s*:\s*/i, "");
+    if (wrongNo && no === wrongNo) {
+      li.classList.add("wrong");
+      // a hand-drawn red pen loop around the wrong line
+      li.insertAdjacentHTML("beforeend",
+        '<svg viewBox="0 0 300 40" preserveAspectRatio="none" aria-hidden="true"><path d="M18 8 C 70 2, 220 1, 284 8 C 300 12, 298 32, 270 35 C 200 40, 60 39, 16 33 C -2 28, 0 12, 30 6"/></svg>');
+    }
+    $("lines").appendChild(li);
+  });
+  show("lines", lines.length > 0);
+  const note = $("penNote");
+  if (d.error_step) { note.textContent = d.error_explanation; note.classList.remove("good"); }
+  else { note.textContent = t("noMistake"); note.classList.add("good"); }
+  $("concept").textContent = d.concept;
+  show("readSection");
+  show("confirmRow");
+  show("fixBox", false);
+  $("readSection").scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
+}
+
+$("looksRight").onclick = () => { show("confirmRow", false); startLesson(); };
+$("fixIt").onclick = () => { $("fixText").value = state.diagnosis.problem; show("fixBox"); $("fixText").focus(); };
+$("reread").onclick = async () => {
+  const problem = $("fixText").value.trim();
+  if (!problem) return;
+  $("reread").disabled = true;
+  clearError();
+  try {
+    const r = await api("/api/correct", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ session: state.session, problem }) });
+    noteProvider(r.provider);
+    renderReading(r.diagnosis);
+  } catch (err) {
+    fail(err.message, () => $("reread").click());
+  } finally { $("reread").disabled = false; }
+};
+
+// ---------- 3. lesson (streamed) ----------
+function stream(url, target, handlers) {
+  if (state.stream) state.stream.close();
+  let text = "";
+  target.innerHTML = "<p class=\"status\"></p>";
+  const es = new EventSource(url);
+  state.stream = es;
+  es.addEventListener("chunk", (e) => {
+    const d = JSON.parse(e.data);
+    text += d.text;
+    renderMarkdown(target, text);
+    noteProvider(d.provider);
+  });
+  es.addEventListener("verification", (e) => handlers.verification && handlers.verification(JSON.parse(e.data)));
+  es.addEventListener("check", (e) => handlers.check && handlers.check(JSON.parse(e.data).question));
+  es.addEventListener("error", (e) => {
+    // server-sent error event has data; a dropped connection doesn't
+    es.close();
+    const msg = e.data ? JSON.parse(e.data).message : "The connection dropped.";
+    fail(msg, handlers.retry);
+  });
+  es.addEventListener("done", () => { es.close(); handlers.done && handlers.done(text); });
+}
+
+function startLesson() {
+  clearError();
+  resetBelow("readSection");
+  show("lessonSection");
+  state.lessonLang = lang();
+  state.lessonCur = $("curriculum").value;
+  const url = `/api/lesson?session=${state.session}&language=${encodeURIComponent(lang())}&curriculum=${encodeURIComponent($("curriculum").value)}`;
+  stream(url, $("lesson"), {
+    verification: (v) => {
+      noteProvider(v.provider);
+      if (v.confidence === "low") { $("verifyNote").textContent = t("lowConfidence"); show("verifyNote"); }
+    },
+    check: showQuestion,
+    retry: startLesson,
+  });
+}
+
+// Demo flip: change the language or curriculum after a lesson, then teach again
+function offerTeachAgain() {
+  const changed = state.session && state.lessonLang && (lang() !== state.lessonLang || $("curriculum").value !== state.lessonCur);
+  show("againRow", changed);
+}
+$("teachAgain").onclick = () => { show("againRow", false); startLesson(); };
+
+// ---------- 4. check ----------
+function showQuestion(q, exam) {
+  $("question").textContent = q;
+  show("examTag", !!(exam && exam.real));
+  if (exam && exam.real) $("examTag").textContent = exam.exam_name || t("realExam");
+  const src = $("source");
+  src.innerHTML = "";
+  if (exam && exam.source_url) {
+    src.append(t(exam.real ? "examFrom" : "webFrom") + " ");
+    const a = document.createElement("a");
+    a.href = exam.source_url; a.target = "_blank"; a.rel = "noopener";
+    a.textContent = exam.exam_name || exam.source_title || exam.source_url;
+    src.append(a);
+  } else if (exam) {
+    src.textContent = t("somoWrote");
+  }
+  show("source", !!exam);
+  $("answer").value = "";
+  show("verdict", false);
+  show("nextRow", false);
+  show("checkSection");
+  $("answer").disabled = false;
+  $("submit").disabled = false;
+}
+
+$("answerForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const answer = $("answer").value.trim();
+  if (!answer) return;
+  $("submit").disabled = true;
+  clearError();
+  try {
+    const r = await api("/api/check", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ session: state.session, answer }) });
+    noteProvider(r.provider);
+    const v = $("verdict");
+    v.textContent = (r.correct ? t("right") : t("notYet")) + (r.feedback ? " " + r.feedback : "");
+    v.className = "verdict " + (r.correct ? "yes" : "no");
+    show("verdict");
+    const m = Object.values(r.mastery)[0];
+    if (m) { $("tally").textContent = t("tally")(m.correct, m.attempts); show("tally"); }
+    $("answer").disabled = true;
+    if (r.correct) { show("nextRow"); show("reexplainSection", false); }
+    else reexplain();
+  } catch (err) {
+    $("submit").disabled = false;
+    fail(err.message, () => $("answerForm").requestSubmit());
+  }
+});
+
+function reexplain() {
+  show("reexplainSection");
+  $("reexplainSection").scrollIntoView({ behavior: "smooth", block: "start" });
+  stream(`/api/reexplain?session=${state.session}`, $("reexplain"), {
+    check: (q) => {
+      showQuestion(q);
+      // keep the new question below the new explanation
+      $("reexplainSection").after($("checkSection"));
+    },
+    retry: reexplain,
+  });
+}
+
+$("harder").onclick = async () => {
+  $("harder").disabled = true;
+  try {
+    const r = await api(`/api/next?session=${state.session}&difficulty=harder`);
+    showQuestion(r.question);
+  } catch (err) { fail(err.message, () => $("harder").click()); }
+  finally { $("harder").disabled = false; }
+};
+$("examPractice").onclick = async () => {
+  const btn = $("examPractice");
+  btn.disabled = true;
+  const label = btn.textContent;
+  btn.textContent = t("searching") + "…";
+  try {
+    const r = await api(`/api/practice?session=${state.session}`);
+    showQuestion(r.question, r);
+    $("checkSection").scrollIntoView({ behavior: "smooth", block: "start" });
+  } catch (err) { fail(err.message, () => $("examPractice").click()); }
+  finally { btn.disabled = false; btn.textContent = label; }
+};
+$("newProblem").onclick = () => $("file").click();
+
+// ---------- reset ----------
+const ORDER = ["snapSection", "readSection", "lessonSection", "checkSection", "reexplainSection"];
+function resetBelow(id) {
+  if (state.stream) state.stream.close();
+  clearError();
+  // put the check card back in its original place
+  $("lessonSection").after($("checkSection"));
+  ORDER.slice(ORDER.indexOf(id) + 1).forEach((s) => show(s, false));
+  show("verifyNote", false);
+  show("againRow", false);
+  show("tally", false);
+}
+
+// ---------- setup ----------
+(async function init() {
+  try {
+    const cfg = await api("/api/config");
+    $("language").innerHTML = cfg.languages.map((l) => `<option>${l}</option>`).join("");
+    $("curriculum").innerHTML = Object.entries(cfg.curricula).map(([k, v]) => `<option value="${k}">${v}</option>`).join("");
+    $("curriculum").value = cfg.default_curriculum;
+  } catch {
+    $("language").innerHTML = "<option>English</option><option>Swahili</option><option>Spanish</option>";
+    $("curriculum").innerHTML = '<option value="tanzania">Tanzania (NECTA)</option><option value="us">US (Common Core)</option>';
+  }
+  try {
+    const saved = JSON.parse(localStorage.getItem("somo-settings") || "{}");
+    if (saved.language) $("language").value = saved.language;
+    if (saved.curriculum) $("curriculum").value = saved.curriculum;
+  } catch {}
+  applyLanguage();
+  ["language", "curriculum"].forEach((id) => $(id).addEventListener("change", () => {
+    try { localStorage.setItem("somo-settings", JSON.stringify({ language: lang(), curriculum: $("curriculum").value })); } catch {}
+    applyLanguage();
+    offerTeachAgain();
+  }));
+})();
+</script>
+</body>
+</html>

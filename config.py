@@ -24,11 +24,17 @@ CURRICULA = {
         "label": "Tanzania (NECTA)",
         "context": "Tanzanian secondary school (Form 1-4), NECTA national exams",
         "analogies": "daladala fares, market prices in shillings, bodaboda rides",
+        "exam_label": "NECTA national exams (CSEE Form Four / FTNA Form Two, Basic Mathematics)",
+        "exam_query": "NECTA CSEE Basic Mathematics past paper {concept}",
+        "exam_domains": ["necta.go.tz", "maktaba.tetea.org"],  # official papers first; open web if empty
     },
     "us": {
         "label": "US (Common Core)",
         "context": "US public school, Common Core / state standards (e.g. NY Regents)",
         "analogies": "subway swipes, bodega prices in dollars, sports scores",
+        "exam_label": "New York State Regents exams (Algebra I)",
+        "exam_query": "NY Regents Algebra I exam question {concept}",
+        "exam_domains": ["jmap.org", "nysedregents.org"],
     },
 }
 
@@ -43,3 +49,11 @@ IMAGE_MIME_TYPES = {
     ".heic": "image/heic",
     ".heif": "image/heif",
 }
+
+# Nimble (real past exam questions from the live web)
+NIMBLE_MAX_RESULTS = 5
+NIMBLE_CHARS_PER_PAGE = 20000   # a full past paper has many questions; the one we need may be far down
+MIN_PAGE_CHARS = 2000            # shorter than this and the result is a PDF: download and read the PDF itself
+PDF_TIMEOUT_S = 12
+PDF_MAX_BYTES = 15_000_000
+PRACTICE_CACHE_FILE = "practice_cache.json"   # found exam questions, kept across restarts

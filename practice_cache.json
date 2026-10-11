@@ -1,0 +1,12 @@
+{
+  "solving simultaneous linear equations|tanzania|English": {
+    "question": "In a multiple choice test, 2 marks were awarded for each correct answer, 1 mark was deducted from each incorrect answer and 0 for not writing an answer. Anna answered 49 questions and scored 62 marks out of 100. Letting x be the number of correct answers and y be the number of incorrect answers, and using the inverse matrix method, determine the number of questions that Anna answered correctly.",
+    "expected_answer": "37",
+    "kind": "past_exam",
+    "real": true,
+    "source_url": "https://maktaba.tetea.org/past-papers/csee/basic_math/BasicMath-F4-2023.pdf",
+    "source_title": "041 Time: 3 Hours 1 2. 3. 4. 5. 6. 7. I 301041 ll 100017",
+    "exam_name": "NECTA CSEE 2023",
+    "seconds": 62.6
+  }
+}
