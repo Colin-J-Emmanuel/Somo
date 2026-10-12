@@ -58,5 +58,15 @@
     "source_title": "",
     "exam_name": "",
     "seconds": 36.2
+  },
+  "solving simultaneous linear equations by elimination|tanzania|Swahili": {
+    "question": "Tatua milinganyo ifuatayo kwa wakati mmoja kwa kutumia njia ya kuondoa (elimination): 3x + 2y = 13 na 2x + 5y = 16.",
+    "expected_answer": "x = 3, y = 2",
+    "kind": "generated",
+    "real": false,
+    "source_url": "",
+    "source_title": "",
+    "exam_name": "",
+    "seconds": 33.7
   }
 }
